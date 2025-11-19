@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NotebookLM - RAG Web App</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Left Pane: Document List -->
+        <div class="left-pane" id="leftPane">
+            <div class="pane-header">
+                <h2>Documents</h2>
+                <button class="upload-btn" id="uploadBtn">+ Upload</button>
+            </div>
+            <div class="document-list-header" id="documentListHeader" style="display: none;">
+                <label class="select-all-label">
+                    <input type="checkbox" id="selectAllCheckbox" class="select-all-checkbox">
+                    <span>Select all sources</span>
+                </label>
+            </div>
+            <div class="document-list" id="documentList">
+                <div class="empty-state">No documents uploaded yet</div>
+            </div>
+            <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt,.md" multiple style="display: none;">
+        </div>
+
+        <!-- Resizer between left and center -->
+        <div class="resizer resizer-left" id="leftResizer"></div>
+
+        <!-- Center Pane: Chat Interface -->
+        <div class="center-pane" id="centerPane">
+            <div class="pane-header">
+                <h2>Chat</h2>
+            </div>
+            <div class="chat-container" id="chatContainer">
+                <div class="welcome-message">
+                    <h3>Welcome to NotebookLM</h3>
+                    <p>Upload documents and ask questions about them. I'll provide answers with citations to the source material.</p>
+                </div>
+            </div>
+            <div class="chat-input-container">
+                <div class="input-wrapper">
+                    <textarea 
+                        id="chatInput" 
+                        placeholder="Ask a question about your documents..."
+                        rows="2"
+                    ></textarea>
+                    <button id="sendBtn" class="send-btn">Send</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Resizer between center and right -->
+        <div class="resizer resizer-right" id="rightResizer"></div>
+
+        <!-- Right Pane: Document Viewer -->
+        <div class="right-pane" id="rightPane">
+            <div class="pane-header">
+                <h2>Document Viewer</h2>
+                <select id="documentSelector" style="display: none;">
+                    <option value="">Select a document...</option>
+                </select>
+            </div>
+            <div class="document-viewer" id="documentViewer">
+                <div class="empty-state">
+                    Select a document or click on a citation to view content
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Progress Modal -->
+    <div id="uploadModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h3>Uploading Document</h3>
+            <div class="progress-bar-container">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+            <p id="progressText">Preparing upload...</p>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
+
