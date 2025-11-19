@@ -30,11 +30,18 @@ function setupEventListeners() {
   document.getElementById("sendBtn").addEventListener("click", sendMessage);
 
   // Enter key in chat input
-  document.getElementById("chatInput").addEventListener("keydown", (e) => {
+  const chatInput = document.getElementById("chatInput");
+  chatInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
     }
+  });
+
+  // Auto-resize textarea
+  chatInput.addEventListener("input", function () {
+    this.style.height = "auto";
+    this.style.height = Math.min(this.scrollHeight, 200) + "px";
   });
 
   // Document selector
@@ -89,7 +96,13 @@ function renderDocumentList() {
   const header = document.getElementById("documentListHeader");
 
   if (documents.length === 0) {
-    list.innerHTML = '<div class="empty-state">No documents uploaded yet</div>';
+    list.innerHTML = `
+      <div class="empty-state">
+        <span class="material-icons empty-state-icon" aria-hidden="true">description</span>
+        <p>No documents uploaded yet</p>
+        <p class="empty-state-hint">Upload documents to get started</p>
+      </div>
+    `;
     header.style.display = "none";
     return;
   }
@@ -148,12 +161,8 @@ function renderDocumentList() {
                 <div class="document-item-actions">
                     <button class="document-menu-btn" onclick="event.stopPropagation(); showDocumentMenu(event, '${
                       doc.id
-                    }')">
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                            <circle cx="8" cy="3" r="1.5" fill="currentColor"/>
-                            <circle cx="8" cy="8" r="1.5" fill="currentColor"/>
-                            <circle cx="8" cy="13" r="1.5" fill="currentColor"/>
-                        </svg>
+                    }')" aria-label="Document options">
+                        <span class="material-icons" aria-hidden="true">more_vert</span>
                     </button>
                 </div>
             </div>
@@ -201,6 +210,7 @@ async function uploadFile(file) {
 
   modal.style.display = "flex";
   progressBar.style.width = "0%";
+  progressBar.setAttribute("aria-valuenow", "0");
   progressText.textContent = `Uploading ${file.name}...`;
 
   try {
@@ -208,6 +218,7 @@ async function uploadFile(file) {
     formData.append("file", file);
 
     progressBar.style.width = "30%";
+    progressBar.setAttribute("aria-valuenow", "30");
     progressText.textContent = "Processing document...";
 
     const response = await fetch(`${API_BASE}/upload`, {
@@ -221,11 +232,13 @@ async function uploadFile(file) {
     }
 
     progressBar.style.width = "70%";
+    progressBar.setAttribute("aria-valuenow", "70");
     progressText.textContent = "Indexing document...";
 
     const result = await response.json();
 
     progressBar.style.width = "100%";
+    progressBar.setAttribute("aria-valuenow", "100");
     progressText.textContent = "Complete!";
 
     setTimeout(() => {
@@ -285,7 +298,8 @@ async function sendMessage() {
     addMessage("assistant", `Error: ${error.message}`, []);
   } finally {
     sendBtn.disabled = false;
-    sendBtn.textContent = "Send";
+    sendBtn.innerHTML =
+      '<span class="material-icons" aria-hidden="true">send</span>';
   }
 }
 
@@ -305,13 +319,26 @@ function addMessage(role, content, citations = []) {
   contentDiv.className = "message-content";
 
   if (role === "assistant") {
-    // Format answer with paragraphs
-    const paragraphs = content.split("\n\n");
-    paragraphs.forEach((para) => {
-      const p = document.createElement("p");
-      p.textContent = para;
-      contentDiv.appendChild(p);
-    });
+    // Render Markdown content
+    if (typeof marked !== "undefined") {
+      // Configure marked options (using use() for v11+)
+      marked.use({
+        breaks: true,
+        gfm: true,
+      });
+
+      // Render Markdown to HTML
+      const htmlContent = marked.parse(content);
+      contentDiv.innerHTML = htmlContent;
+    } else {
+      // Fallback to plain text if marked is not available
+      const paragraphs = content.split("\n\n");
+      paragraphs.forEach((para) => {
+        const p = document.createElement("p");
+        p.textContent = para;
+        contentDiv.appendChild(p);
+      });
+    }
 
     // Add citations
     if (citations && citations.length > 0) {
@@ -378,7 +405,7 @@ async function selectDocument(documentId) {
 async function loadDocument(documentId, highlightChunkIndex = null) {
   if (!documentId) {
     document.getElementById("documentViewer").innerHTML =
-      '<div class="empty-state">Select a document or click on a citation to view content</div>';
+      '<div class="empty-state"><span class="material-icons empty-state-icon" aria-hidden="true">visibility</span><p>Select a document or click on a citation to view content</p></div>';
     return;
   }
 
@@ -418,7 +445,7 @@ async function loadDocument(documentId, highlightChunkIndex = null) {
   } catch (error) {
     document.getElementById(
       "documentViewer"
-    ).innerHTML = `<div class="empty-state">Error loading document: ${error.message}</div>`;
+    ).innerHTML = `<div class="empty-state"><span class="material-icons empty-state-icon" aria-hidden="true">error_outline</span><p>Error loading document: ${error.message}</p></div>`;
   }
 }
 
@@ -433,12 +460,18 @@ function displayDocument(
 
   // Display document metadata
   const metadataDiv = document.createElement("div");
-  metadataDiv.style.cssText =
-    "margin-bottom: 16px; padding: 12px; background: #f5f5f5; border-radius: 8px; font-size: 12px;";
+  metadataDiv.className = "document-metadata";
   metadataDiv.innerHTML = `
-        <strong>${escapeHtml(metadata.file_name || "Document")}</strong><br>
-        ${metadata.word_count ? `${metadata.word_count} words` : ""}
-        ${metadata.page_count ? ` • ${metadata.page_count} pages` : ""}
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+          <span class="material-icons" style="font-size: 18px; color: var(--md-on-surface); opacity: 0.4;">description</span>
+          <strong style="font-size: 14px; font-weight: 400; color: var(--md-on-surface);">${escapeHtml(
+            metadata.file_name || "Document"
+          )}</strong>
+        </div>
+        <div style="font-size: 12px; color: var(--md-on-surface-variant); opacity: 0.6;">
+          ${metadata.word_count ? `${metadata.word_count} words` : ""}
+          ${metadata.page_count ? ` • ${metadata.page_count} pages` : ""}
+        </div>
     `;
 
   viewer.innerHTML = "";
@@ -492,13 +525,14 @@ function displayDocument(
   ) {
     // For Word documents, show text content inline with optional download button
     const actionsDiv = document.createElement("div");
+    actionsDiv.className = "document-actions";
     actionsDiv.style.cssText =
-      "margin-bottom: 16px; padding: 12px; background: #e3f2fd; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;";
+      "margin-bottom: 24px; padding: 16px 0; display: flex; justify-content: space-between; align-items: center; gap: 12px;";
 
     const downloadBtn = document.createElement("button");
-    downloadBtn.style.cssText =
-      "padding: 6px 12px; background-color: #2196f3; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 500; transition: background-color 0.2s;";
-    downloadBtn.textContent = "📥 Download Original";
+    downloadBtn.className = "mdc-button mdc-button--raised";
+    downloadBtn.innerHTML =
+      '<span class="material-icons" aria-hidden="true">download</span><span>Download</span>';
     downloadBtn.onclick = (e) => {
       e.preventDefault();
       const link = document.createElement("a");
@@ -508,14 +542,8 @@ function displayDocument(
       link.click();
       document.body.removeChild(link);
     };
-    downloadBtn.onmouseenter = () => {
-      downloadBtn.style.backgroundColor = "#1976d2";
-    };
-    downloadBtn.onmouseleave = () => {
-      downloadBtn.style.backgroundColor = "#2196f3";
-    };
 
-    actionsDiv.innerHTML = `<span style="font-size: 12px; color: #1976d2; font-weight: 500;">📄 ${escapeHtml(
+    actionsDiv.innerHTML = `<span style="font-size: 14px; color: var(--md-on-surface); font-weight: 400; display: flex; align-items: center; gap: 8px; opacity: 0.8;"><span class="material-icons" style="font-size: 18px; opacity: 0.4;">description</span>${escapeHtml(
       metadata.file_name || "Document"
     )}</span>`;
     actionsDiv.appendChild(downloadBtn);
@@ -612,10 +640,8 @@ function showDocumentMenu(event, docId) {
   menu.id = "documentContextMenu";
   menu.innerHTML = `
     <div class="menu-item" onclick="removeDocument('${docId}')">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="margin-right: 8px;">
-        <path d="M3 4h10M6 4V3a1 1 0 011-1h2a1 1 0 011 1v1M6 7v5M10 7v5M5 4l1 9a1 1 0 001 1h4a1 1 0 001-1l1-9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-      </svg>
-      Remove source
+      <span class="material-icons" aria-hidden="true">delete_outline</span>
+      <span>Remove source</span>
     </div>
   `;
 
@@ -679,7 +705,7 @@ async function removeDocument(docId) {
     if (selectedDocumentId === docId) {
       selectedDocumentId = null;
       document.getElementById("documentViewer").innerHTML =
-        '<div class="empty-state">Select a document or click on a citation to view content</div>';
+        '<div class="empty-state"><span class="material-icons empty-state-icon" aria-hidden="true">visibility</span><p>Select a document or click on a citation to view content</p></div>';
     }
 
     closeDocumentMenu();

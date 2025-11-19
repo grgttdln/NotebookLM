@@ -147,13 +147,17 @@ class RAGPipeline:
                 if not chunk or 'text' not in chunk:
                     continue
                     
-                chunk_text = chunk.get('text', '')
+                chunk_text = chunk.get('text', '').strip()
+                if not chunk_text:
+                    continue
+                    
                 chunk_metadata = chunk.get('metadata', {})
                 document_id = chunk_metadata.get('document_id', 'unknown')
                 file_name = chunk_metadata.get('file_name', 'Unknown')
                 chunk_index = chunk_metadata.get('chunk_index', 0)
                 
-                context_parts.append(f"[{i}] {chunk_text}")
+                # Format context with source information for better clarity
+                context_parts.append(f"Source {i} (from {file_name}):\n{chunk_text}")
                 
                 citations.append({
                     'citation_id': i,
@@ -172,7 +176,8 @@ class RAGPipeline:
                     'chunks': []
                 }
             
-            context = "\n\n".join(context_parts)
+            # Join with clearer separators
+            context = "\n\n---\n\n".join(context_parts)
             
             # Generate answer using LLM
             answer = self.hf_client.generate_response(question, context)

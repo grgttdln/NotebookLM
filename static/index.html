@@ -5,83 +5,104 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NotebookLM - RAG Web App</title>
     <link rel="stylesheet" href="/static/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 </head>
 <body>
     <div class="app-container">
         <!-- Left Pane: Document List -->
-        <div class="left-pane" id="leftPane">
-            <div class="pane-header">
-                <h2>Documents</h2>
-                <button class="upload-btn" id="uploadBtn">+ Upload</button>
-            </div>
-            <div class="document-list-header" id="documentListHeader" style="display: none;">
+        <aside class="left-pane" id="leftPane" role="complementary" aria-label="Document list">
+            <header class="pane-header">
+                <h2 class="pane-title">Sources</h2>
+                <button class="mdc-button mdc-button--raised upload-btn" id="uploadBtn" aria-label="Upload document">
+                    <span class="material-icons" aria-hidden="true">upload</span>
+                    <span class="button-label">Upload</span>
+                </button>
+            </header>
+            <div class="document-list-header" id="documentListHeader" style="display: none;" role="toolbar" aria-label="Document selection">
                 <label class="select-all-label">
-                    <input type="checkbox" id="selectAllCheckbox" class="select-all-checkbox">
+                    <input type="checkbox" id="selectAllCheckbox" class="select-all-checkbox" aria-label="Select all documents">
                     <span>Select all sources</span>
                 </label>
             </div>
-            <div class="document-list" id="documentList">
-                <div class="empty-state">No documents uploaded yet</div>
+            <div class="document-list" id="documentList" role="list" aria-label="Uploaded documents">
+                <div class="empty-state">
+                    <span class="material-icons empty-state-icon" aria-hidden="true">description</span>
+                    <p>No documents uploaded yet</p>
+                    <p class="empty-state-hint">Upload documents to get started</p>
+                </div>
             </div>
-            <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt,.md" multiple style="display: none;">
-        </div>
+            <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt,.md" multiple style="display: none;" aria-label="File input">
+        </aside>
 
         <!-- Resizer between left and center -->
-        <div class="resizer resizer-left" id="leftResizer"></div>
+        <div class="resizer resizer-left" id="leftResizer" aria-label="Resize panels" role="separator"></div>
 
         <!-- Center Pane: Chat Interface -->
-        <div class="center-pane" id="centerPane">
-            <div class="pane-header">
-                <h2>Chat</h2>
-            </div>
-            <div class="chat-container" id="chatContainer">
+        <main class="center-pane" id="centerPane" role="main">
+            <header class="pane-header">
+                <h2 class="pane-title">Chat</h2>
+            </header>
+            <div class="chat-container" id="chatContainer" role="log" aria-live="polite" aria-label="Chat messages">
                 <div class="welcome-message">
+                    <span class="material-icons welcome-icon" aria-hidden="true">chat_bubble_outline</span>
                     <h3>Welcome to NotebookLM</h3>
                     <p>Upload documents and ask questions about them. I'll provide answers with citations to the source material.</p>
                 </div>
             </div>
             <div class="chat-input-container">
                 <div class="input-wrapper">
-                    <textarea 
-                        id="chatInput" 
-                        placeholder="Ask a question about your documents..."
-                        rows="2"
-                    ></textarea>
-                    <button id="sendBtn" class="send-btn">Send</button>
+                    <div class="input-container">
+                        <textarea 
+                            id="chatInput" 
+                            placeholder="Ask a question about your documents..."
+                            rows="1"
+                            aria-label="Chat input"
+                            aria-describedby="sendBtn"
+                        ></textarea>
+                    </div>
+                    <button id="sendBtn" class="mdc-button mdc-button--raised send-btn" aria-label="Send message">
+                        <span class="material-icons" aria-hidden="true">send</span>
+                    </button>
                 </div>
             </div>
-        </div>
+        </main>
 
         <!-- Resizer between center and right -->
-        <div class="resizer resizer-right" id="rightResizer"></div>
+        <div class="resizer resizer-right" id="rightResizer" aria-label="Resize panels" role="separator"></div>
 
         <!-- Right Pane: Document Viewer -->
-        <div class="right-pane" id="rightPane">
-            <div class="pane-header">
-                <h2>Document Viewer</h2>
-                <select id="documentSelector" style="display: none;">
+        <aside class="right-pane" id="rightPane" role="complementary" aria-label="Document viewer">
+            <header class="pane-header">
+                <h2 class="pane-title">Document Viewer</h2>
+                <select id="documentSelector" class="mdc-select" style="display: none;" aria-label="Select document">
                     <option value="">Select a document...</option>
                 </select>
-            </div>
-            <div class="document-viewer" id="documentViewer">
+            </header>
+            <div class="document-viewer" id="documentViewer" role="region" aria-label="Document content">
                 <div class="empty-state">
-                    Select a document or click on a citation to view content
+                    <span class="material-icons empty-state-icon" aria-hidden="true">visibility</span>
+                    <p>Select a document or click on a citation to view content</p>
                 </div>
             </div>
-        </div>
+        </aside>
     </div>
 
     <!-- Upload Progress Modal -->
-    <div id="uploadModal" class="modal" style="display: none;">
-        <div class="modal-content">
-            <h3>Uploading Document</h3>
+    <div id="uploadModal" class="modal" style="display: none;" role="dialog" aria-labelledby="uploadModalTitle" aria-modal="true">
+        <div class="modal-backdrop" aria-hidden="true"></div>
+        <div class="modal-content elevation-24">
+            <h3 id="uploadModalTitle">Uploading Document</h3>
             <div class="progress-bar-container">
-                <div class="progress-bar" id="progressBar"></div>
+                <div class="progress-bar" id="progressBar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
             </div>
-            <p id="progressText">Preparing upload...</p>
+            <p id="progressText" class="progress-text">Preparing upload...</p>
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
     <script src="/static/app.js"></script>
 </body>
 </html>

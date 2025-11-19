@@ -85,49 +85,75 @@ class Retriever:
                     f"have different lengths after repair attempt. Please re-upload your documents."
                 )
         
-        # Calculate cosine similarities
-        query_vec = np.array(query_embedding)
-        similarities = []
+        # Calculate cosine similarities using vectorized numpy operations
+        # This is much faster than looping through vectors individually
+        query_vec = np.array(query_embedding, dtype=np.float32)
         
-        for i, vec in enumerate(self.vectors):
-            # Bounds check
-            if i >= len(self.chunks):
-                continue
-            
-            # Filter by document_ids if provided
-            if document_ids is not None:
-                chunk_metadata = self.chunks[i].get('metadata', {})
-                chunk_doc_id = chunk_metadata.get('document_id')
-                if chunk_doc_id not in document_ids:
+        # Convert all vectors to numpy array at once
+        vectors_array = np.array(self.vectors, dtype=np.float32)
+        
+        # Filter by document_ids if provided - create mask for valid indices
+        valid_indices = None
+        if document_ids is not None:
+            valid_indices = []
+            for i, chunk in enumerate(self.chunks):
+                if i >= len(self.vectors):
                     continue
+                chunk_metadata = chunk.get('metadata', {})
+                chunk_doc_id = chunk_metadata.get('document_id')
+                if chunk_doc_id in document_ids:
+                    valid_indices.append(i)
             
-            vec_array = np.array(vec)
-            dot_product = np.dot(query_vec, vec_array)
-            norm_query = np.linalg.norm(query_vec)
-            norm_vec = np.linalg.norm(vec_array)
+            if not valid_indices:
+                return []
             
-            if norm_query == 0 or norm_vec == 0:
-                similarity = 0.0
-            else:
-                similarity = float(dot_product / (norm_query * norm_vec))
-            
-            similarities.append((i, similarity))
+            # Filter vectors array to only include valid indices
+            vectors_array = vectors_array[valid_indices]
+        else:
+            # Use all indices up to the minimum of vectors and chunks length
+            max_len = min(len(self.vectors), len(self.chunks))
+            valid_indices = list(range(max_len))
+            vectors_array = vectors_array[:max_len]
         
-        # If no similarities found (e.g., all filtered out), return empty
-        if not similarities:
-            return []
+        # Vectorized cosine similarity calculation
+        # Compute dot products for all vectors at once
+        dot_products = np.dot(vectors_array, query_vec)
         
-        # Sort by similarity and get top-k
-        similarities.sort(key=lambda x: x[1], reverse=True)
-        top_k = similarities[:k]
+        # Compute norms for all vectors at once
+        vector_norms = np.linalg.norm(vectors_array, axis=1)
+        query_norm = np.linalg.norm(query_vec)
+        
+        # Handle zero norms to avoid division by zero
+        # Create mask for valid similarities (non-zero norms)
+        valid_mask = (vector_norms > 0) & (query_norm > 0)
+        
+        # Calculate similarities vectorized
+        similarities = np.zeros(len(vectors_array))
+        similarities[valid_mask] = dot_products[valid_mask] / (vector_norms[valid_mask] * query_norm)
+        
+        # Get top-k indices using argpartition (faster than full sort for large arrays)
+        # top_k_indices are indices into the filtered similarities array
+        if len(similarities) <= k:
+            top_k_indices = np.argsort(similarities)[::-1]
+        else:
+            # Use argpartition for better performance when k << n
+            top_k_indices = np.argpartition(similarities, -k)[-k:]
+            top_k_indices = top_k_indices[np.argsort(similarities[top_k_indices])[::-1]]
         
         # Return chunks with similarity scores
         results = []
-        for idx, similarity_score in top_k:
-            # Additional bounds check
-            if idx >= len(self.chunks):
+        for filtered_idx in top_k_indices:
+            # Get the similarity score (from filtered array)
+            similarity_score = float(similarities[filtered_idx])
+            
+            # Map back to original index (valid_indices always exists)
+            original_idx = valid_indices[filtered_idx]
+            
+            # Bounds check
+            if original_idx >= len(self.chunks):
                 continue
-            chunk = self.chunks[idx].copy()
+            
+            chunk = self.chunks[original_idx].copy()
             chunk['similarity'] = similarity_score
             results.append(chunk)
         
