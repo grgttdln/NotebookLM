@@ -18,6 +18,7 @@ class RAGPipeline:
         self,
         huggingface_api_key: Optional[str] = None,
         groq_api_key: Optional[str] = None,
+        openrouter_api_key: Optional[str] = None,
         chunk_size: int = 1000,
         chunk_overlap: int = 200,
         storage_path: str = "./vectorstore/hf_store.json"
@@ -28,6 +29,7 @@ class RAGPipeline:
         Args:
             huggingface_api_key: Hugging Face API token (for embeddings)
             groq_api_key: Groq API token (for LLM)
+            openrouter_api_key: OpenRouter API token (for LLM fallback)
             chunk_size: Chunk size for text splitting
             chunk_overlap: Chunk overlap
             storage_path: Path for vector storage
@@ -36,7 +38,8 @@ class RAGPipeline:
         self.chunker = Chunker(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
         self.hf_client = HuggingFaceClient(
             huggingface_api_key=huggingface_api_key,
-            groq_api_key=groq_api_key
+            groq_api_key=groq_api_key,
+            openrouter_api_key=openrouter_api_key
         )
         self.retriever = Retriever(storage_path=storage_path)
     

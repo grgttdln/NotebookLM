@@ -41,17 +41,19 @@ class HuggingFaceClient:
         self, 
         huggingface_api_key: Optional[str] = None,
         groq_api_key: Optional[str] = None,
+        openrouter_api_key: Optional[str] = None,
         embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2",
-        llm_model: str = "llama-3.1-8b-instant"
+        llm_model: str = "nvidia/nemotron-nano-12b-v2-vl:free"
     ):
         """
-        Initialize Hugging Face client for embeddings and Groq client for LLM
+        Initialize Hugging Face client for embeddings and Groq/OpenRouter client for LLM
         
         Args:
             huggingface_api_key: Hugging Face API token (if None, reads from HUGGINGFACE_API_KEY env var)
             groq_api_key: Groq API token (if None, reads from GROQ_API_KEY env var)
+            openrouter_api_key: OpenRouter API token (if None, reads from OPENROUTER_API_KEY env var)
             embedding_model: Hugging Face embedding model name (default: sentence-transformers/all-MiniLM-L6-v2)
-            llm_model: Groq LLM model name (default: llama-3.1-8b-instant)
+            llm_model: LLM model name (default: llama-3.1-8b-instant)
         """
         # Initialize Hugging Face Inference API for embeddings
         self.huggingface_api_key = huggingface_api_key or os.getenv("HUGGINGFACE_API_KEY")
@@ -61,24 +63,34 @@ class HuggingFaceClient:
                 "Then set it: export HUGGINGFACE_API_KEY=your_token_here"
             )
         
-        # Initialize Groq API for LLM
+        # Initialize LLM Client (OpenRouter or Groq)
+        self.openrouter_api_key = openrouter_api_key or os.getenv("OPENROUTER_API_KEY")
         self.groq_api_key = groq_api_key or os.getenv("GROQ_API_KEY")
-        if not self.groq_api_key:
-            raise ValueError(
-                "GROQ_API_KEY not set. Get an API key from Groq.\n"
-                "Then set it: export GROQ_API_KEY=your_token_here"
-            )
         
         self.embedding_model_name = embedding_model
         self.llm_model = llm_model
         
-        # Initialize Groq client
-        if GROQ_AVAILABLE:
-            self.groq_client = Groq(api_key=self.groq_api_key)
-            print(f"Using Groq API for LLM: {llm_model}")
+        self.use_openrouter = False
+        
+        if self.openrouter_api_key:
+            self.use_openrouter = True
+            print(f"Using OpenRouter API for LLM: {llm_model}")
+            if self.llm_model == "llama-3.1-8b-instant" or self.llm_model == "meta-llama/llama-3.1-8b-instruct:free": 
+                 self.llm_model = "nvidia/llama-3.1-nemotron-70b-instruct:free" 
+                 print(f"Switched default model to OpenRouter equivalent: {self.llm_model}")
+        
+        elif self.groq_api_key:
+            # Initialize Groq client
+            if GROQ_AVAILABLE:
+                self.groq_client = Groq(api_key=self.groq_api_key)
+                print(f"Using Groq API for LLM: {llm_model}")
+            else:
+                raise ValueError(
+                    "Groq package not installed. Install it with: pip install groq\n"
+                )
         else:
             raise ValueError(
-                "Groq package not installed. Install it with: pip install groq\n"
+                "No LLM API key set. Please set either GROQ_API_KEY or OPENROUTER_API_KEY.\n"
             )
         
         # Use huggingface_hub InferenceClient for embeddings if available
@@ -447,28 +459,64 @@ class HuggingFaceClient:
 
 
         try:
-            # Groq API call
-            response = self.groq_client.chat.completions.create(
-                model=model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a helpful assistant that answers questions based on provided document context. Answer directly and concisely. Do not list page numbers or sources unless specifically asked. If the context doesn't contain relevant information, simply say you don't have that information in the provided context."
+            if self.use_openrouter:
+                import requests
+                response = requests.post(
+                    url="https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {self.openrouter_api_key}",
+                        "HTTP-Referer": "http://localhost:8000", # Optional, for including your app on openrouter.ai rankings
+                        "X-Title": "NotebookLM RAG", # Optional
                     },
-                    {
-                        "role": "user",
-                        "content": prompt
+                    json={
+                        "model": model,
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": "You are a helpful assistant that answers questions based on provided document context. Answer directly and concisely. Do not list page numbers or sources unless specifically asked. If the context doesn't contain relevant information, simply say you don't have that information in the provided context."
+                            },
+                            {
+                                "role": "user",
+                                "content": prompt
+                            }
+                        ],
+                        "temperature": max(temperature, 0.1),
+                        "max_tokens": 1000,
                     }
-                ],
-                temperature=max(temperature, 0.1),  # Minimum 0.1 for more natural responses
-                max_tokens=1000,
-            )
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    if result.get('choices') and len(result['choices']) > 0:
+                        return result['choices'][0]['message']['content'].strip()
+                    else:
+                        raise ValueError(f"Invalid response from OpenRouter: {result}")
+                else:
+                    raise ValueError(f"OpenRouter API error: {response.status_code} - {response.text}")
 
-            # Extract response
-            if response.choices and len(response.choices) > 0:
-                return response.choices[0].message.content.strip()
+            else:
+                # Groq API call
+                response = self.groq_client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are a helpful assistant that answers questions based on provided document context. Answer directly and concisely. Do not list page numbers or sources unless specifically asked. If the context doesn't contain relevant information, simply say you don't have that information in the provided context."
+                        },
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
+                    temperature=max(temperature, 0.1),  # Minimum 0.1 for more natural responses
+                    max_tokens=1000,
+                )
 
-            raise ValueError("No response generated from Groq API.")
+                # Extract response
+                if response.choices and len(response.choices) > 0:
+                    return response.choices[0].message.content.strip()
+
+            raise ValueError("No response generated from API.")
 
         except Exception as e:
-            raise ValueError(f"Error generating response from Groq API: {e}")
+            raise ValueError(f"Error generating response from LLM API: {e}")

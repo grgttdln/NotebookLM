@@ -33,7 +33,8 @@ app.add_middleware(
 # Initialize RAG pipeline
 rag_pipeline = RAGPipeline(
     huggingface_api_key=os.getenv("HUGGINGFACE_API_KEY"),
-    groq_api_key=os.getenv("GROQ_API_KEY")
+    groq_api_key=os.getenv("GROQ_API_KEY"),
+    openrouter_api_key=os.getenv("OPENROUTER_API_KEY")
 )
 
 # Store uploaded files temporarily
